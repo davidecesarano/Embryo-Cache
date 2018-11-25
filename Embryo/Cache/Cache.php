@@ -45,7 +45,7 @@
          */
         public function __construct(string $cachePath, StreamFactoryInterface $streamFactory = null)
         {
-            $this->cachePath = $cachePath;
+            $this->cachePath     = $cachePath;
             $this->streamFactory = ($streamFactory) ? $streamFactory : new StreamFactory; 
         }
 
@@ -77,18 +77,19 @@
             }
 
             $content = @unserialize($file->getContent());
-
             if (!$content) {
                 $file->unlink();
                 return $default;
             }
 
-            if (time() >= $content[0]) {
+            $expires_at = $content[0];
+            $output     = $content[1];
+
+            if (time() >= $expires_at) {
                 $file->unlink();
                 return $default;
             }
-
-            return $content[1];
+            return $output;
         }
         
         /**
@@ -129,11 +130,20 @@
         /**
          * Wipes clean the entire cache's keys.
          *
-         * @return bool True on success and false on failure.
+         * @return bool
          */
         public function clear()
         {
-
+            $success = true;
+            if ($dir = opendir($this->cachePath)) {
+                while (($file = readdir($dir)) !== false) {
+                    if (!unlink($file)) {
+                        $success = false;
+                    }
+                }
+                closedir($dir);
+            }
+            return $success;
         }
 
         /**
