@@ -29,7 +29,7 @@
             } elseif ($ttl === null) {
                 $expires_at = time() + $this->ttl;
             } else {
-                throw new \InvalidArgumentException("invalid TTL: " . print_r($ttl, true));
+                throw new \InvalidArgumentException("TTL must be an integer or an instance of DateInterval");
             }
             return $expires_at;
         }
