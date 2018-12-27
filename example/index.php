@@ -16,7 +16,7 @@
     }
 
     $body = $response->getBody();
-    $body->write($cache->get('test', 'Hello World!'));
+    $body->write($cache->get('test', 'Default value!'));
     $response = $response->withBody($body);
 
     $emitter->emit($response);
