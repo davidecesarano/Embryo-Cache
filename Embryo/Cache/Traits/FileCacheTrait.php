@@ -87,7 +87,7 @@
          * Get file path.
          *
          * @param string $key
-         * @return void
+         * @return string
          */
         private function getFilePath(string $key): string
         {
