@@ -12,6 +12,7 @@
     
     namespace Embryo\Cache;
 
+    use Embryo\Cache\Exceptions\InvalidArgumentException;
     use Embryo\Cache\Traits\{ExpiresCacheTrait, FileCacheTrait};
     use Embryo\Http\Factory\StreamFactory;
     use Psr\Http\Message\StreamFactoryInterface;
@@ -71,6 +72,10 @@
          */
         public function get($key, $default = null)
         {   
+            if (!is_string($key)) {
+                throw new InvalidArgumentException("key must be a string");   
+            }
+
             $file = $this->getFile($key);
             if (!$file) {
                 return $default;
@@ -104,6 +109,10 @@
          */
         public function set($key, $value, $ttl = null)
         {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException("key must be a string");   
+            }
+
             $expires_at = $this->setExpiresAt($ttl);
             $content    = serialize([$expires_at, $value]);
             $file       = $this->setFile($key);
@@ -123,6 +132,10 @@
          */
         public function delete($key)
         {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException("key must be a string");   
+            }
+
             $file = $this->getFile($key);
             $file->unlink();
         }
@@ -157,7 +170,7 @@
         public function getMultiple($keys, $default = null)
         {
             if (!is_array($keys)) {
-                throw new \InvalidArgumentException("keys must be either of type array or Traversable");
+                throw new InvalidArgumentException("keys must be either of type array or Traversable");
             }
 
             $values = [];
@@ -178,7 +191,7 @@
         public function setMultiple($values, $ttl = null)
         {  
             if (!is_array($values)) {
-                throw new \InvalidArgumentException("Values must be either of type array or Traversable");
+                throw new InvalidArgumentException("Values must be either of type array or Traversable");
             }
 
             $success = true;
@@ -198,7 +211,7 @@
         public function deleteMultiple($keys)
         {
             if (!is_array($keys)) {
-                throw new \InvalidArgumentException("keys must be either of type array or Traversable");
+                throw new InvalidArgumentException("keys must be either of type array or Traversable");
             }
 
             foreach ($keys as $key) {
@@ -215,6 +228,9 @@
          */
         public function has($key)
         {
+            if (!is_string($key)) {
+                throw new InvalidArgumentException("key must be a string");   
+            }
             return $this->get($key, $this) !== $this;
         }
     }
