@@ -9,27 +9,28 @@
 
     namespace Embryo\Cache\Traits;
 
-    use DateInterval;
-    use DateTitme;
+    use Embryo\Cache\Exceptions\InvalidArgumentException;
 
     trait ExpiresCacheTrait
     {
         /**
          * Set and return the expiration time value.
          *
-         * @param int|DateInterval $ttl
+         * @param int|null|\DateInterval $ttl
          * @return int
+         * @throws InvalidArgumentException
          */
-        protected function setExpiresAt($ttl): int
+        protected function setExpiresAt($ttl = null): int
         {
             if (is_int($ttl)) {
                 $expires_at = time() + $ttl;
-            } elseif ($ttl instanceof DateInterval) {
-                $expires_at = DateTime::createFromFormat("U", time())->add($ttl)->getTimestamp();
-            } elseif ($ttl === null) {
-                $expires_at = time() + $this->ttl;
+            } elseif ($ttl instanceof \DateInterval) {
+                $datetime = \DateTime::createFromFormat("U", date('Y-m-d H:i:s'));
+                $expires_at = ($datetime) ? $datetime->add($ttl)->getTimestamp() : time();
+            } elseif (!$ttl) {
+                $expires_at = time() + intval($this->ttl);
             } else {
-                throw new \InvalidArgumentException("TTL must be an integer or an instance of DateInterval");
+                throw new InvalidArgumentException("TTL must be an integer, an instance of DateInterval or a NULL");
             }
             return $expires_at;
         }

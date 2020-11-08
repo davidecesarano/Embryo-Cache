@@ -13,7 +13,7 @@
     namespace Embryo\Cache;
 
     use Embryo\Cache\Exceptions\InvalidArgumentException;
-    use Embryo\Cache\Traits\{ExpiresCacheTrait, FileCacheTrait};
+    use Embryo\Cache\Traits\ExpiresCacheTrait;
     use Embryo\Http\Factory\StreamFactory;
     use Psr\Http\Message\StreamFactoryInterface;
     use Psr\SimpleCache\CacheInterface;
@@ -21,7 +21,6 @@
     class Cache implements CacheInterface
     {
         use ExpiresCacheTrait;
-        use FileCacheTrait;
 
         /**
          * @var string $cachePath
@@ -29,12 +28,12 @@
         protected $cachePath;
         
         /**
-         * @var string $cachePath
+         * @var StreamFactoryInterface $streamFactory
          */
         protected $streamFactory;
 
         /**
-         * @var int|DateInterval $ttl
+         * @var int|\DateInterval $ttl
          */
         private $ttl;
 
@@ -46,14 +45,26 @@
          */
         public function __construct(string $cachePath, StreamFactoryInterface $streamFactory = null)
         {
-            $this->cachePath     = $cachePath;
+            $this->cachePath     = rtrim($cachePath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
             $this->streamFactory = ($streamFactory) ? $streamFactory : new StreamFactory; 
+        }
+
+        /**
+         * Set StreamFactory.
+         * 
+         * @param StreamFactoryInterface $streamFactory
+         * @return self
+         */
+        public function setStreamFactory(StreamFactoryInterface $streamFactory): self 
+        {
+            $this->streamFactory = $streamFactory;
+            return $this;
         }
 
         /**
          * Set default TTL.
          *
-         * @param int|DateInterval $ttl
+         * @param int|\DateInterval $ttl
          * @return self
          */
         public function setDefaultTtl($ttl): self
@@ -75,15 +86,16 @@
             if (!is_string($key)) {
                 throw new InvalidArgumentException("key must be a string");   
             }
-
-            $file = $this->getFile($key);
-            if (!$file) {
+            
+            $file = $this->cachePath.hash('sha256', $key);
+            if (!file_exists($file)) {
                 return $default;
             }
 
-            $content = @unserialize($file->getContent());
-            if (!$content) {
-                $file->unlink();
+            $stream = $this->streamFactory->createStreamFromFile($file, 'r');
+            $content = @unserialize($stream->getContents());
+            if (!$content || !is_array($content) || count($content) != 2) {
+                @unlink($stream->getMetadata('uri'));
                 return $default;
             }
 
@@ -91,7 +103,7 @@
             $output     = $content[1];
 
             if (time() >= $expires_at) {
-                $file->unlink();
+                @unlink($stream->getMetadata('uri'));
                 return $default;
             }
             return $output;
@@ -103,7 +115,7 @@
          *
          * @param string $key
          * @param mixed $value
-         * @param null|int|DateInterval $ttl
+         * @param null|int|\DateInterval $ttl
          * @return bool
          * @throws InvalidArgumentException
          */
@@ -115,12 +127,15 @@
 
             $expires_at = $this->setExpiresAt($ttl);
             $content    = serialize([$expires_at, $value]);
-            $file       = $this->setFile($key);
+            $file       = $this->cachePath.hash('sha256', $key);
 
-            if (!$file->setContent($content)) {
+            try {
+                $stream = $this->streamFactory->createStreamFromFile($file, 'r');
+                $stream->write($content);
+                return true;
+            } catch (\Exception $e) {
                 return false;
             }
-            return true;
         }
 
         /**
@@ -130,14 +145,19 @@
          * @return bool
          * @throws InvalidArgumentException
          */
-        public function delete($key)
+        public function delete($key): bool
         {
             if (!is_string($key)) {
                 throw new InvalidArgumentException("key must be a string");   
             }
 
-            $file = $this->getFile($key);
-            $file->unlink();
+            $file = $this->cachePath.hash('sha256', $key);
+            if (!file_exists($file)) {
+                return false;
+            }
+
+            $stream = $this->streamFactory->createStreamFromFile($file, 'r');
+            return @unlink($stream->getMetadata('uri'));
         }
 
         /**
@@ -147,16 +167,19 @@
          */
         public function clear()
         {
-            $success = true;
-            if ($dir = opendir($this->cachePath)) {
-                while (($file = readdir($dir)) !== false) {
-                    if (!unlink($file)) {
-                        $success = false;
+            if (!$dir = opendir($this->cachePath)) {
+                return false;
+            }
+
+            while (($file = readdir($dir)) !== false) {
+                if ($file != '.' && $file != '..' && $file != '.gitignore') {
+                    if (!@unlink($this->cachePath.$file)) {
+                        return false;
                     }
                 }
-                closedir($dir);
             }
-            return $success;
+            closedir($dir);
+            return true;
         }
 
         /**
@@ -184,7 +207,7 @@
          * Obtains multiple cache items by their unique keys.
          *
          * @param array $values
-         * @param null|int|DateInterval $ttl
+         * @param null|int|\DateInterval $ttl
          * @return bool
          * @throws InvalidArgumentException
          */
@@ -194,11 +217,13 @@
                 throw new InvalidArgumentException("Values must be either of type array or Traversable");
             }
 
-            $success = true;
             foreach ($values as $key => $value) {
-                $success = $this->set($key, $value, $ttl) && $success;
+                $set = $this->set($key, $value, $ttl);
+                if (!$set) {
+                    return false;
+                }
             }
-            return $success;            
+            return true;            
         }
 
         /**
@@ -208,15 +233,19 @@
          * @return bool
          * @throws InvalidArgumentException
          */
-        public function deleteMultiple($keys)
+        public function deleteMultiple($keys): bool
         {
             if (!is_array($keys)) {
                 throw new InvalidArgumentException("keys must be either of type array or Traversable");
             }
 
             foreach ($keys as $key) {
-                $this->delete($key);
+                $delete = $this->delete($key);
+                if (!$delete) {
+                    return false;
+                }
             }
+            return true;
         }
 
         /**
