@@ -130,7 +130,7 @@
             $file       = $this->cachePath.hash('sha256', $key);
 
             try {
-                $stream = $this->streamFactory->createStreamFromFile($file, 'r');
+                $stream = $this->streamFactory->createStreamFromFile($file, 'w');
                 $stream->write($content);
                 return true;
             } catch (\Exception $e) {
